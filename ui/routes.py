@@ -3,6 +3,8 @@ from flask import request, render_template, session, send_from_directory, jsonif
 from flask_socketio import SocketIO
 import json
 import logging
+import platform
+import subprocess
 from clases.worker import worker as w
 from ui.ui import Ui
 _ui = Ui()
@@ -208,3 +210,79 @@ def handle_connect():
 @socketio.on('execute_command')
 def handle_command(command):
     _ui.handle_command(command)
+
+# Ruta para reiniciar el servicio ytdlp2STRM
+@app.route('/restart_service', methods=['POST'])
+def restart_service():
+    """
+    Reinicia el servicio ytdlp2STRM según el sistema operativo:
+    - Windows: Reinicia la tarea programada 'ytdlp2STRM'
+    - Linux: Reinicia el servicio systemd 'ytdlp2strm.service'
+    """
+    try:
+        os_type = platform.system()
+        
+        if os_type == 'Windows':
+            # Windows: Reiniciar tarea programada
+            try:
+                # Detener la tarea
+                subprocess.run(
+                    ['schtasks', '/End', '/TN', 'ytdlp2STRM'],
+                    capture_output=True,
+                    text=True,
+                    check=False  # No fallar si la tarea no está corriendo
+                )
+                
+                # Iniciar la tarea
+                #result = subprocess.run(
+                #    ['schtasks', '/Run', '/TN', 'ytdlp2STRM'],
+                #    capture_output=True,
+                #    text=True,
+                #    check=True
+                #)
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Tarea programada ytdlp2STRM reiniciada correctamente',
+                    'os': 'Windows'
+                })
+            except subprocess.CalledProcessError as e:
+                return jsonify({
+                    'success': False,
+                    'message': f'Error al reiniciar la tarea programada: {e.stderr}',
+                    'os': 'Windows'
+                }), 500
+                
+        elif os_type == 'Linux':
+            # Linux: Reiniciar servicio systemd
+            try:
+                result = subprocess.run(
+                    ['sudo', 'systemctl', 'restart', 'ytdlp2strm.service'],
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Servicio ytdlp2strm.service reiniciado correctamente',
+                    'os': 'Linux'
+                })
+            except subprocess.CalledProcessError as e:
+                return jsonify({
+                    'success': False,
+                    'message': f'Error al reiniciar el servicio: {e.stderr}',
+                    'os': 'Linux'
+                }), 500
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Sistema operativo no soportado: {os_type}',
+                'os': os_type
+            }), 400
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error inesperado: {str(e)}'
+        }), 500
