@@ -42,6 +42,8 @@ class tv3cat:
     def fetch_program_id_and_seasons(self):
         url = self.channel
         response = requests.get(url)
+        log = (f"Fetching program ID and seasons for {url}...")
+        l.log("tv3cat", log)
         seasons = []
 
         if response.status_code == 200:
@@ -60,6 +62,9 @@ class tv3cat:
                     seasons = [f'PUTEMP_{i}' for i in range(1, final_season_number + 1)]
                     
                     program_id = data.get('props', {}).get('pageProps', {}).get('headers', {}).get('Surrogate-Key').split('programatv_id=')[1].split('&')[0]
+                    
+                    log = (f"Program ID: {program_id}, Seasons: {seasons}")
+                    l.log("tv3cat", log)
                     return program_id, seasons
         return None, []
 
@@ -100,8 +105,11 @@ class tv3cat:
         episodes = []
         url = f"https://www.3cat.cat/api/3cat/dades/?queryKey=%5B%22tira%22%2C%7B%22url%22%3A%22%2F%2Fapi.3cat.cat%2Fvideos%3F_format%3Djson%26ordre%3D-capitol%26origen%3Dllistat%26programatv_id%3D{program_id}%26tipus_contingut%3DPPD%26items_pagina%3D1000%26pagina%3D1%26sdom%3Dimg%26version%3D2.0%26cache%3D180%26https%3Dtrue%26master%3Dyes%26ordre%3Dcapitol%26temporada%3D%26ordre%3Dcapitol%26temporada%3D%22%7D%5D"
         response = requests.get(url)
-        
+        log = (f"Fetching JSON data for {url}...")
+        l.log("tv3cat", log)
         if response.status_code == 200:
+            log = (f"JSON data fetched successfully for {url}...")
+            l.log("tv3cat", log)
             json_data = response.json()
             items = json_data.get('resposta', {}).get('items', {}).get('item', [])
             for item in items:
@@ -114,9 +122,11 @@ class tv3cat:
                 capitulo = item.get('capitol_temporada') if item.get('capitol_temporada') > 0 else item.get('capitol')
                 titulo = item.get('permatitle')
                 programa = item.get('programa')
-                
+                #log = (f"Processing episode {capitulo} of season {temporada} for {programa}...")
+                #l.log("tv3cat", log)
                 # Solo procesar si hay número de capítulo
-                if capitulo > 0:
+                #si es un numero entero
+                if isinstance(capitulo, int):
                     video_url = self.get_video_url(video_id)
                     
                     episode_data = {
@@ -130,6 +140,8 @@ class tv3cat:
                     episodes.append(episode_data)
                 if episode_data['capitulo'] > 0:
                     episodes.append(episode_data)
+        log = (f"Fetched {len(episodes)} episodes for {program_id}...")
+        l.log("tv3cat", log)
         return episodes
 
 

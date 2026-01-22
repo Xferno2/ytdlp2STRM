@@ -216,73 +216,40 @@ def handle_command(command):
 def restart_service():
     """
     Reinicia el servicio ytdlp2STRM según el sistema operativo:
-    - Windows: Reinicia la tarea programada 'ytdlp2STRM'
-    - Linux: Reinicia el servicio systemd 'ytdlp2strm.service'
+    - Windows: Reinicia la tarea programada 'ytdlp2STRM' de forma asíncrona
+    - Linux: Reinicia el servicio systemd 'ytdlp2strm.service' de forma asíncrona
     """
     try:
         os_type = platform.system()
         
-        if os_type == 'Windows':
-            # Windows: Reiniciar tarea programada
-            try:
-                # Detener la tarea
-                subprocess.run(
-                    ['schtasks', '/End', '/TN', 'ytdlp2STRM'],
-                    capture_output=True,
-                    text=True,
-                    check=False  # No fallar si la tarea no está corriendo
+        def run_restart():
+            # Pequeña espera para asegurar que la respuesta JSON llegue al cliente
+            time.sleep(2)
+            if os_type == 'Windows':
+                # Comando para reiniciar la tarea en Windows
+                cmd = 'schtasks /End /TN "ytdlp2STRM" && schtasks /Run /TN "ytdlp2STRM"'
+                subprocess.Popen(
+                    cmd,
+                    shell=True,
+                    creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
                 )
-                
-                # Iniciar la tarea
-                #result = subprocess.run(
-                #    ['schtasks', '/Run', '/TN', 'ytdlp2STRM'],
-                #    capture_output=True,
-                #    text=True,
-                #    check=True
-                #)
-                
-                return jsonify({
-                    'success': True,
-                    'message': 'Tarea programada ytdlp2STRM reiniciada correctamente',
-                    'os': 'Windows'
-                })
-            except subprocess.CalledProcessError as e:
-                return jsonify({
-                    'success': False,
-                    'message': f'Error al reiniciar la tarea programada: {e.stderr}',
-                    'os': 'Windows'
-                }), 500
-                
-        elif os_type == 'Linux':
-            # Linux: Reiniciar servicio systemd
-            try:
-                result = subprocess.run(
-                    ['sudo', 'systemctl', 'restart', 'ytdlp2strm.service'],
-                    capture_output=True,
-                    text=True,
-                    check=True
-                )
-                
-                return jsonify({
-                    'success': True,
-                    'message': 'Servicio ytdlp2strm.service reiniciado correctamente',
-                    'os': 'Linux'
-                })
-            except subprocess.CalledProcessError as e:
-                return jsonify({
-                    'success': False,
-                    'message': f'Error al reiniciar el servicio: {e.stderr}',
-                    'os': 'Linux'
-                }), 500
-        else:
-            return jsonify({
-                'success': False,
-                'message': f'Sistema operativo no soportado: {os_type}',
-                'os': os_type
-            }), 400
+            elif os_type == 'Linux':
+                # Comando para reiniciar el servicio en Linux
+                subprocess.Popen(['sudo', 'systemctl', 'restart', 'ytdlp2strm.service'])
+
+        # Ejecutar el reinicio en un hilo separado para no bloquear la respuesta
+        import threading
+        import time
+        threading.Thread(target=run_restart, daemon=True).start()
+
+        return jsonify({
+            'success': True,
+            'message': f'Reinicio del servicio iniciado ({os_type}). El sistema estará disponible en unos segundos.',
+            'os': os_type
+        })
             
     except Exception as e:
         return jsonify({
             'success': False,
-            'message': f'Error inesperado: {str(e)}'
+            'message': f'Error al intentar iniciar el reinicio: {str(e)}'
         }), 500

@@ -54,6 +54,12 @@ class Cron(threading.Thread):
         for job in schedule.get_jobs():
             schedule.cancel_job(job)
 
+        def run_task(task_func, params):
+            try:
+                task_func(params)
+            except Exception as e:
+                l.log('cron', f"Error executing task {params}: {e}")
+
         # Schedule all new tasks
         for cron in self.crons:
             if 'timezone' in cron and cron['timezone']:
@@ -75,14 +81,17 @@ class Cron(threading.Thread):
 
             every_method = getattr(schedule.every(qty), cron['every'])
 
+            # Wrap main_cli in a thread to prevent blocking
+            task_to_do = lambda params=cron['do']: threading.Thread(target=run_task, args=(main_cli, params), daemon=True).start()
+
             if cron['at']:
                 if re.match(r'^\d{2}:\d{2}$', cron['at']):
-                    every_method.at(cron['at'], local_tz_str).do(main_cli, cron['do'])
+                    every_method.at(cron['at'], local_tz_str).do(task_to_do)
                     l.log('cron', f"Scheduled task {cron['do']} at {cron['at']} {local_tz_str}.")
                 else:
                     l.log('cron', f"Invalid time format {cron['at']} for cron: {cron}.")
             else:
-                every_method.do(main_cli, cron['do'])
+                every_method.do(task_to_do)
                 l.log('cron', f"Scheduled task {cron['do']} every {qty} {cron['every']}.")
 
     def watch_config(self):
@@ -95,7 +104,7 @@ class Cron(threading.Thread):
         try:
             while not self.stop_event.is_set():
                 schedule.run_pending()
-                self.stop_event.wait(60)
+                self.stop_event.wait(1)
         except KeyboardInterrupt:
             self.observer.stop()
         self.observer.stop()
