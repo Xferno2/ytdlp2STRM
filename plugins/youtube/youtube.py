@@ -608,6 +608,20 @@ def filter_and_modify_bandwidth(m3u8_content):
     high_audio = False
     sd_audio = ""
     
+    # select by language only if at least one stream specifies language id
+    sel_by_lang = False
+    if lang and lang.strip():
+        for i in range(len(lines)):
+            line = lines[i]
+            if line.startswith("#EXT-X-STREAM-INF:"):
+                info_lang = ""
+                pattern = r'YT-EXT-AUDIO-CONTENT-ID="([^."]+)'
+                match = re.search(pattern, line)
+                if match:
+                    info_lang = match.group(1)
+                    if (info_lang != ""):
+                        sel_by_lang = True
+    
     for i in range(len(lines)):
         line = lines[i]
         
@@ -616,7 +630,20 @@ def filter_and_modify_bandwidth(m3u8_content):
             url = lines[i + 1]
             bandwidth = int(info.split("BANDWIDTH=")[1].split(",")[0])
 
-            if bandwidth > highest_bandwidth:
+            desired_lang = not sel_by_lang
+            if sel_by_lang:
+                info_lang = ""
+                pattern = r'YT-EXT-AUDIO-CONTENT-ID="([^."]+)'
+                match = re.search(pattern, info)
+                if match:
+                    info_lang = match.group(1)
+                    if (info_lang != ""):
+                        if (lang.startswith(info_lang) or info_lang.startswith(lang) or info_lang == lang): # en-US versus en
+                            desired_lang = True
+                        else:
+                            desired_lang = False
+
+            if bandwidth > highest_bandwidth and desired_lang:
                 highest_bandwidth = bandwidth
                 best_video_info = info.replace(f"BANDWIDTH={bandwidth}", "BANDWIDTH=279001")
                 best_video_url = url
